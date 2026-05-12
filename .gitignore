@@ -1,0 +1,24 @@
+# Neovim Lua plugin
+*.swp
+*.swo
+*~
+
+# Lua development
+luac.out
+.luacheckcache
+
+# Testing
+plenary.nvim/
+.nvim/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+.cursor/
+
+# Temporary directories during development
+.tmp.*

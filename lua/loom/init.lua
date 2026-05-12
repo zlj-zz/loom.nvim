@@ -69,6 +69,22 @@ function M.setup(opts)
   if config.autosave.enabled then
     require("loom.autosave").start()
   end
+
+  if config.integrations.which_key then
+    local ok, wk = pcall(require, "which-key")
+    if ok then
+      wk.add({
+        { "<leader>l", group = "loom" },
+        { "<leader>ls", "<cmd>LoomSave<cr>", desc = "Save snapshot" },
+        { "<leader>ll", "<cmd>LoomLoad<cr>", desc = "Load snapshot" },
+        { "<leader>lL", "<cmd>LoomList<cr>", desc = "List snapshots" },
+        { "<leader>lw", "<cmd>LoomWorkspaceSave<cr>", desc = "Save workspace" },
+        { "<leader>lW", "<cmd>LoomWorkspaceLoad<cr>", desc = "Load workspace" },
+        { "<leader>lc", "<cmd>LoomCleanup<cr>", desc = "Cleanup snapshots" },
+        { "<leader>lS", "<cmd>LoomSwitch<cr>", desc = "Switch branch/snapshot" },
+      })
+    end
+  end
 end
 
 function M.get_config()

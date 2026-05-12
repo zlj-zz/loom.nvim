@@ -43,7 +43,7 @@ end
 
 ---@param item SnapshotItem
 ---@return string
-local function format_snapshot(item)
+function M.format_snapshot(item)
   local parts = { item.name }
   if item.branch then
     table.insert(parts, "  (" .. item.branch .. ")")
@@ -66,7 +66,7 @@ end
 function M.select_snapshot(items, on_select)
   vim.ui.select(items, {
     prompt = "Select snapshot:",
-    format_item = format_snapshot,
+    format_item = M.format_snapshot,
   }, function(choice)
     if choice and on_select then
       on_select(choice.name)

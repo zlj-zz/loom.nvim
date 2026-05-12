@@ -57,33 +57,34 @@ function M.check()
   local corrupted = {}
   for _, name in ipairs(snapshots) do
     local dir = storage.snapshot_dir(name)
-    local meta_path = dir .. "/meta.json"
-    local layout_path = dir .. "/layout.json"
-
-    if vim.fn.filereadable(meta_path) ~= 1 or vim.fn.filereadable(layout_path) ~= 1 then
-      table.insert(corrupted, name)
-      goto next_snapshot
-    end
-
-    local meta = storage.read_json(meta_path)
-    local layout = storage.read_json(layout_path)
+    local meta = storage.read_json(dir .. "/meta.json")
+    local layout = storage.read_json(dir .. "/layout.json")
 
     if meta and layout then
       valid = valid + 1
     else
       table.insert(corrupted, name)
     end
-
-    ::next_snapshot::
   end
 
   if #corrupted == 0 then
-    vim.health.ok("Snapshots: " .. valid .. " valid, 0 corrupted")
+    vim.health.ok(string.format("Snapshots: %d valid, 0 corrupted", valid))
   else
-    vim.health.warn("Snapshots: " .. valid .. " valid, " .. #corrupted .. " corrupted")
+    vim.health.warn(string.format("Snapshots: %d valid, %d corrupted", valid, #corrupted))
     for _, name in ipairs(corrupted) do
       vim.health.info("  - " .. name .. " (missing or invalid meta.json/layout.json)")
     end
+  end
+
+  if config.autosave.enabled then
+    vim.health.ok(string.format("Autosave: enabled (interval: %d min, max: %d)", config.autosave.interval_minutes, config.autosave.max_auto_snaps))
+  else
+    vim.health.info("Autosave: disabled")
+  end
+
+  vim.health.info(string.format("Cleanup: max_snapshots=%d, auto_cleanup_after_days=%d", config.cleanup.max_snapshots, config.cleanup.auto_cleanup_after_days))
+  if valid > config.cleanup.max_snapshots then
+    vim.health.warn(string.format("Snapshot count (%d) exceeds max_snapshots (%d). Run :LoomCleanup", valid, config.cleanup.max_snapshots))
   end
 end
 

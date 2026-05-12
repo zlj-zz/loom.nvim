@@ -9,11 +9,33 @@ local TIME_THRESHOLDS = {
   { 2592000, function(w) return string.format("%d week%s ago", w, w > 1 and "s" or "") end, 604800 },
 }
 
+-- On macOS/BSD, strptime parses UTC time as local time. Detect and compute offset.
+local function needs_utc_offset()
+  local epoch = vim.fn.strptime("%Y-%m-%dT%H:%M:%SZ", "1970-01-01T00:00:00Z")
+  return epoch ~= 0
+end
+
+local NEEDS_UTC_OFFSET = needs_utc_offset()
+
+local function get_utc_offset()
+  ---@diagnostic disable-next-line: param-type-mismatch
+  local now = os.time()
+  ---@diagnostic disable-next-line: param-type-mismatch
+  local utc_as_local = os.time(os.date("!*t", now))
+  return os.difftime(now, utc_as_local)
+end
+
+local UTC_OFFSET = NEEDS_UTC_OFFSET and get_utc_offset() or 0
+
 ---@param iso_timestamp string
 ---@return string
 function M.format_relative_time(iso_timestamp)
   local ok, parsed = pcall(vim.fn.strptime, "%Y-%m-%dT%H:%M:%SZ", iso_timestamp)
-  if not ok or parsed == 0 then
+  if ok and parsed and parsed > 0 then
+    if NEEDS_UTC_OFFSET then
+      parsed = parsed + UTC_OFFSET
+    end
+  else
     ok, parsed = pcall(vim.fn.strptime, "%Y-%m-%dT%H:%M:%S+%%z", iso_timestamp)
     if not ok or parsed == 0 then
       return iso_timestamp

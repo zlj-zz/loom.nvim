@@ -3,11 +3,20 @@ local M = {}
 local storage = require("loom.storage")
 
 --- Parse ISO8601 timestamp to unix seconds.
+--- On macOS/BSD, strptime parses UTC time as local time; compensate.
 ---@param iso string
 ---@return number|nil
 local function parse_timestamp(iso)
   local ok, parsed = pcall(vim.fn.strptime, "%Y-%m-%dT%H:%M:%SZ", iso)
   if ok and parsed and parsed > 0 then
+    -- macOS/BSD strptime treats 'Z' as literal and parses as local time.
+    local epoch = vim.fn.strptime("%Y-%m-%dT%H:%M:%SZ", "1970-01-01T00:00:00Z")
+    if epoch ~= 0 then
+      local now = os.time()
+      ---@diagnostic disable-next-line: param-type-mismatch
+      local offset = os.difftime(now, os.time(os.date("!*t", now)))
+      parsed = parsed + offset
+    end
     return parsed
   end
   return nil

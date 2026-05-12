@@ -711,4 +711,8 @@ function M.autosave(name, opts)
   return do_save(name, autosave_opts, dir)
 end
 
+-- Expose internal functions for unit testing
+M._resolve_target = resolve_target
+M._execute_switch = execute_switch
+
 return M

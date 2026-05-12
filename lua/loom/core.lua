@@ -3,6 +3,8 @@ local M = {}
 local storage = require("loom.storage")
 local git = require("loom.git")
 local list_ui = require("loom.list")
+local workspace = require("loom.workspace")
+local statusboard = require("loom.statusboard")
 local capture_buffer = require("loom.capture.buffer")
 local capture_layout = require("loom.capture.layout")
 local capture_terminal = require("loom.capture.terminal")
@@ -95,11 +97,12 @@ local function do_save(name, opts)
 
   if not ok then
     vim.notify("Failed to save snapshot: " .. tostring(err), vim.log.levels.ERROR)
-    return
+    return false
   end
 
   vim.notify("Snapshot saved: " .. name, vim.log.levels.INFO)
   require("loom").events.emit("on_save", { name = name, branch = meta.branch })
+  return true
 end
 
 --- Internal load routine (no branch checks, no UI).
@@ -435,27 +438,187 @@ function M.switch(target)
   continue_switch(target, kind, stashed, config)
 end
 
----@diagnostic disable-next-line: unused-local
+--- Resolve workspace name; prompts when absent.
+---@param name string|nil
+---@param cb fun(resolved: string)
+local function resolve_workspace_name(name, cb)
+  if name and name ~= "" then
+    cb(name)
+    return
+  end
+  local names = workspace.list()
+  if #names == 1 then
+    cb(names[1])
+    return
+  end
+  if #names == 0 then
+    vim.ui.input({ prompt = "Workspace name: " }, function(input)
+      if input and input ~= "" then
+        cb(input)
+      end
+    end)
+    return
+  end
+  list_ui.select_workspace(vim.tbl_map(function(n)
+    local ws = workspace.read(n)
+    return { name = n, repo_count = ws and workspace.repo_count(ws) or 0, updated_at = ws and ws.updated_at }
+  end, names), cb)
+end
+
+---@param resolved_name string
+---@param ws Workspace
+local function show_statusboard(resolved_name, ws)
+  local _, current_repo_path = git.current_repo_name()
+  local repos = workspace.list_repos(ws)
+
+  local items = {}
+  for _, entry in ipairs(repos) do
+    table.insert(items, {
+      repo_name = entry.name,
+      path = entry.path,
+      branch = entry.branch,
+      snapshot = entry.snapshot,
+      is_current = current_repo_path == entry.path,
+    })
+  end
+
+  statusboard.open(resolved_name, items, function(action, item)
+    if not item then
+      return
+    end
+    if action == "load" then
+      if item.snapshot then
+        if vim.fn.getcwd() ~= item.path then
+          local ok_cd = pcall(function()
+            vim.cmd("cd " .. vim.fn.fnameescape(item.path))
+          end)
+          if not ok_cd then
+            vim.notify("Failed to change directory to " .. item.path, vim.log.levels.ERROR)
+            return
+          end
+        end
+        M.load(item.snapshot)
+      else
+        vim.notify("No snapshot for " .. item.repo_name, vim.log.levels.WARN)
+      end
+    elseif action == "delete" then
+      if item.snapshot then
+        M.delete(item.snapshot)
+        workspace.clear_snapshot(ws, item.path)
+        workspace.write(ws)
+        show_statusboard(resolved_name, ws)
+      end
+    elseif action == "refresh" then
+      local fresh = workspace.read(resolved_name)
+      if fresh then
+        show_statusboard(resolved_name, fresh)
+      end
+    end
+  end)
+end
+
+---@param name string|nil
+---@param opts {repos: string[]|nil}
 function M.workspace_save(name, opts)
-  vim.notify("LoomWorkspaceSave: not yet implemented", vim.log.levels.WARN)
+  opts = opts or {}
+
+  resolve_workspace_name(name, function(resolved_name)
+    local repo_name, repo_path = git.current_repo_name()
+    if not repo_path then
+      vim.notify("Not in a git repository", vim.log.levels.ERROR)
+      return
+    end
+
+    local config = require("loom").get_config()
+    local ts = tostring(os.date(config.naming.timestamp_format or "%Y%m%d_%H%M%S"))
+    local snap_name = resolved_name .. "_" .. repo_name .. "_" .. ts
+
+    local saved = do_save(snap_name, { note = "Workspace: " .. resolved_name })
+    if not saved then
+      return
+    end
+
+    local ws = workspace.get_or_create(resolved_name)
+    workspace.upsert_repo(ws, repo_path, snap_name)
+
+    local ok, err = workspace.write(ws)
+    if ok then
+      vim.notify("Workspace saved: " .. resolved_name, vim.log.levels.INFO)
+      require("loom").events.emit("on_workspace_save", { name = resolved_name, repo = repo_path, snapshot = snap_name })
+    else
+      vim.notify("Failed to save workspace: " .. tostring(err), vim.log.levels.ERROR)
+    end
+  end)
 end
 
----@diagnostic disable-next-line: unused-local
+---@param name string|nil
 function M.workspace_load(name)
-  vim.notify("LoomWorkspaceLoad: not yet implemented", vim.log.levels.WARN)
+  resolve_workspace_name(name, function(resolved_name)
+    local ws = workspace.read(resolved_name)
+    if not ws then
+      vim.notify("Workspace not found: " .. resolved_name, vim.log.levels.ERROR)
+      return
+    end
+
+    local _, repo_path = git.current_repo_name()
+    if repo_path then
+      local entry = workspace.get_repo(ws, repo_path)
+      if entry and entry.snapshot then
+        M.load(entry.snapshot)
+      else
+        vim.notify("No snapshot for current repo in workspace: " .. resolved_name, vim.log.levels.WARN)
+      end
+    end
+
+    show_statusboard(resolved_name, ws)
+  end)
 end
 
-function M.workspace_list()
-  vim.notify("LoomWorkspaceList: not yet implemented", vim.log.levels.WARN)
+---@param on_select fun(name: string)|nil
+function M.workspace_list(on_select)
+  local names = workspace.list()
+  if #names == 0 then
+    vim.notify("No workspaces found", vim.log.levels.INFO)
+    return
+  end
+
+  local items = {}
+  for _, n in ipairs(names) do
+    local ws = workspace.read(n)
+    table.insert(items, {
+      name = n,
+      repo_count = ws and workspace.repo_count(ws) or 0,
+      updated_at = ws and ws.updated_at,
+    })
+  end
+
+  list_ui.select_workspace(items, on_select or function(selected)
+    vim.notify("Selected workspace: " .. selected, vim.log.levels.INFO)
+  end)
 end
 
----@diagnostic disable-next-line: unused-local
+---@param name string|nil
 function M.workspace_delete(name)
-  vim.notify("LoomWorkspaceDelete: not yet implemented", vim.log.levels.WARN)
+  resolve_workspace_name(name, function(resolved_name)
+    local ok, err = workspace.delete(resolved_name)
+    if ok then
+      vim.notify("Deleted workspace: " .. resolved_name, vim.log.levels.INFO)
+    else
+      vim.notify("Failed to delete workspace: " .. tostring(err), vim.log.levels.ERROR)
+    end
+  end)
 end
 
-function M.workspace_status()
-  vim.notify("LoomWorkspaceStatus: not yet implemented", vim.log.levels.WARN)
+---@param name string|nil
+function M.workspace_status(name)
+  resolve_workspace_name(name, function(resolved_name)
+    local ws = workspace.read(resolved_name)
+    if not ws then
+      vim.notify("Workspace not found: " .. resolved_name, vim.log.levels.ERROR)
+      return
+    end
+    show_statusboard(resolved_name, ws)
+  end)
 end
 
 return M

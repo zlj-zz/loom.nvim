@@ -22,9 +22,10 @@ function M.workspace_file(name)
   return M.data_dir() .. "/workspaces/" .. name .. ".json"
 end
 
+---@param name string
 ---@return string
-function M.autosave_dir()
-  return M.data_dir() .. "/autosaves"
+function M.autosave_dir(name)
+  return M.data_dir() .. "/autosaves/" .. name
 end
 
 ---@return string
@@ -154,6 +155,32 @@ end
 ---@return boolean
 function M.workspace_exists(name)
   return vim.fn.filereadable(M.workspace_file(name)) == 1
+end
+
+---@param name string
+---@return boolean success, string|nil error
+function M.delete_autosave(name)
+  local dir = M.autosave_dir(name)
+  if vim.fn.isdirectory(dir) == 1 then
+    vim.fn.delete(dir, "rf")
+    return true
+  end
+  return false, "autosave not found: " .. name
+end
+
+---@return string[]
+function M.list_autosaves()
+  local dir = M.data_dir() .. "/autosaves"
+  if vim.fn.isdirectory(dir) ~= 1 then
+    return {}
+  end
+  local items = vim.fn.glob(dir .. "/*/", false, true)
+  local names = {}
+  for _, path in ipairs(items) do
+    table.insert(names, vim.fn.fnamemodify(path, ":t"))
+  end
+  table.sort(names)
+  return names
 end
 
 return M

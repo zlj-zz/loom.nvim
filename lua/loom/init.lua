@@ -64,6 +64,11 @@ function M.setup(opts)
   vim.health.register("loom", function()
     require("loom.health").check()
   end)
+
+  -- start autosave if enabled
+  if config.autosave.enabled then
+    require("loom.autosave").start()
+  end
 end
 
 function M.get_config()

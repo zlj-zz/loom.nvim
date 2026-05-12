@@ -42,7 +42,7 @@ end
 
 ---@class LoomCommand
 ---@field name string
----@field nargs string
+---@field nargs number|string
 ---@field desc string
 ---@field fn function
 
@@ -68,7 +68,7 @@ local commands = {
   },
   {
     name = "LoomList",
-    nargs = "0",
+    nargs = 0,
     desc = "List all snapshots",
     fn = function()
       core.list()
@@ -76,7 +76,7 @@ local commands = {
   },
   {
     name = "LoomDelete",
-    nargs = "1",
+    nargs = 1,
     desc = "Delete a snapshot",
     fn = function(args)
       local name = nil_if_empty(args)
@@ -110,7 +110,7 @@ local commands = {
   },
   {
     name = "LoomCurrent",
-    nargs = "0",
+    nargs = 0,
     desc = "Show current snapshot info",
     fn = function()
       core.current()
@@ -135,7 +135,7 @@ local commands = {
   },
   {
     name = "LoomWorkspaceList",
-    nargs = "0",
+    nargs = 0,
     desc = "List all workspaces",
     fn = function()
       core.workspace_list()
@@ -143,7 +143,7 @@ local commands = {
   },
   {
     name = "LoomWorkspaceDelete",
-    nargs = "1",
+    nargs = 1,
     desc = "Delete a workspace",
     fn = function(args)
       local name = nil_if_empty(args)
@@ -156,7 +156,7 @@ local commands = {
   },
   {
     name = "LoomWorkspaceStatus",
-    nargs = "0",
+    nargs = 0,
     desc = "Show workspace status board",
     fn = function()
       core.workspace_status()
@@ -168,6 +168,31 @@ local commands = {
     desc = "Save current state and switch to branch/snapshot",
     fn = function(args)
       core.switch(nil_if_empty(args))
+    end,
+  },
+  {
+    name = "LoomImport",
+    nargs = "?",
+    desc = "Import IDE recent files as buffers",
+    fn = function(args)
+      core.import(nil_if_empty(args))
+    end,
+  },
+  {
+    name = "LoomCleanup",
+    nargs = "?",
+    desc = "Clean up old snapshots",
+    fn = function(args)
+      local dry_run = false
+      if args then
+        for token in args:gmatch("%S+") do
+          if token == "--dry-run" then
+            dry_run = true
+            break
+          end
+        end
+      end
+      core.cleanup({ dry_run = dry_run })
     end,
   },
 }

@@ -10,6 +10,7 @@ local capture_layout = require("loom.capture.layout")
 local capture_terminal = require("loom.capture.terminal")
 local restore_buffer = require("loom.restore.buffer")
 local restore_layout = require("loom.restore.layout")
+local external_traces = require("loom.capture.external_traces")
 
 --- Generate a simple UUID v4 using vim.fn.rand to avoid global RNG state.
 ---@return string
@@ -39,6 +40,7 @@ end
 ---@param note string|nil
 ---@return table meta
 local function build_meta(note)
+  local ok, traces = pcall(external_traces.capture)
   return {
     snapshot_id = uuid(),
     timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
@@ -47,6 +49,7 @@ local function build_meta(note)
     commit = git.current_commit(),
     note = note,
     nvim_version = tostring(vim.version()),
+    external_traces = ok and traces or nil,
   }
 end
 
@@ -66,8 +69,9 @@ end
 
 --- Internal save routine (no overwrite checks, no UI).
 ---@param name string
----@param opts {note: string|nil}
-local function do_save(name, opts)
+---@param opts {note: string|nil, silent: boolean|nil}
+---@param dir_override string|nil
+local function do_save(name, opts, dir_override)
   opts = opts or {}
   local config = require("loom").get_config()
 
@@ -84,7 +88,7 @@ local function do_save(name, opts)
   end
 
   local meta = build_meta(opts.note)
-  local dir = storage.snapshot_dir(name)
+  local dir = dir_override or storage.snapshot_dir(name)
 
   local ok, err = storage.atomic_write_dir(dir, function(tmp)
     storage.write_json(tmp .. "/meta.json", meta)
@@ -100,8 +104,10 @@ local function do_save(name, opts)
     return false
   end
 
-  vim.notify("Snapshot saved: " .. name, vim.log.levels.INFO)
-  require("loom").events.emit("on_save", { name = name, branch = meta.branch })
+  if not opts.silent then
+    vim.notify("Snapshot saved: " .. name, vim.log.levels.INFO)
+    require("loom").events.emit("on_save", { name = name, branch = meta.branch })
+  end
   return true
 end
 
@@ -212,10 +218,10 @@ function M.save(name, opts)
         end)
       end
     end)
-    return
+    return true
   end
 
-  do_save(name, opts)
+  return do_save(name, opts)
 end
 
 function M.load(name)
@@ -619,6 +625,90 @@ function M.workspace_status(name)
     end
     show_statusboard(resolved_name, ws)
   end)
+end
+
+--- Import recent files from another IDE into nvim buffers.
+---@param source string|nil "jetbrains", "vscode", "auto", or nil
+function M.import(source)
+  source = source or "auto"
+
+  local function detect_source()
+    if vim.fn.isdirectory(".idea") == 1 then
+      return "jetbrains"
+    end
+    if vim.fn.isdirectory(".vscode") == 1 then
+      return "vscode"
+    end
+    return nil
+  end
+
+  if source == "auto" then
+    source = detect_source()
+    if not source then
+      vim.notify("No IDE workspace detected (.idea/ or .vscode/)", vim.log.levels.WARN)
+      return
+    end
+  end
+
+  local files = {}
+
+  if source == "jetbrains" then
+    local traces = external_traces.capture()
+    local jetbrains = traces and traces.jetbrains
+    if jetbrains and jetbrains.recent_files then
+      files = jetbrains.recent_files
+    end
+  elseif source == "vscode" then
+    local result = vim.fn.systemlist({ "git", "ls-files" })
+    if vim.v.shell_error == 0 then
+      local cwd = vim.fn.getcwd()
+      for _, line in ipairs(result) do
+        line = vim.trim(line)
+        if line ~= "" then
+          table.insert(files, cwd .. "/" .. line)
+        end
+      end
+    else
+      vim.notify("VSCode import: no git-tracked files found", vim.log.levels.WARN)
+      return
+    end
+  else
+    vim.notify("Unknown import source: " .. source, vim.log.levels.ERROR)
+    return
+  end
+
+  if #files == 0 then
+    vim.notify("No files to import from " .. source, vim.log.levels.WARN)
+    return
+  end
+
+  for _, path in ipairs(files) do
+    if vim.fn.filereadable(path) == 1 then
+      pcall(function()
+        vim.cmd("edit " .. vim.fn.fnameescape(path))
+      end)
+    end
+  end
+
+  vim.notify("Imported " .. #files .. " file(s) from " .. source, vim.log.levels.INFO)
+end
+
+--- Run cleanup on old snapshots.
+---@param opts {dry_run: boolean}|nil
+function M.cleanup(opts)
+  require("loom.cleanup").cleanup(opts)
+end
+
+--- Save an autosave snapshot to the autosaves directory.
+---@param name string|nil
+---@param opts {note: string|nil}|nil
+---@return boolean
+function M.autosave(name, opts)
+  opts = opts or {}
+  name = name or resolve_name(nil, "autosave_")
+  local autosave_opts = vim.tbl_extend("force", opts, { silent = true })
+  local dir = storage.autosave_dir(name)
+  return do_save(name, autosave_opts, dir)
 end
 
 return M

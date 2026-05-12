@@ -4,7 +4,7 @@
 
 loom.nvim captures your complete editor layout (open buffers, window tree, cursor positions, terminal content) into named **snapshots** that you can restore later. It also supports **workspaces** spanning multiple Git repositories, branch-aware switching with auto-stash, IDE file import, and automatic periodic saves.
 
-![demo-gif-placeholder](https://via.placeholder.com/800x400?text=loom.nvim+demo+GIF)
+<!-- ![demo-gif-placeholder](https://via.placeholder.com/800x400?text=loom.nvim+demo+GIF) -->
 
 ## Features
 
@@ -31,7 +31,7 @@ loom.nvim captures your complete editor layout (open buffers, window tree, curso
 
 ```lua
 {
-  "your-username/loom.nvim",
+  "zlj-zz/loom.nvim",
   dependencies = { "nvim-lua/plenary.nvim" },
   opts = {
     -- see Configuration below
@@ -43,7 +43,7 @@ loom.nvim captures your complete editor layout (open buffers, window tree, curso
 
 ```lua
 use {
-  "your-username/loom.nvim",
+  "zlj-zz/loom.nvim",
   requires = { "nvim-lua/plenary.nvim" },
   config = function()
     require("loom").setup({
@@ -93,6 +93,34 @@ vim.keymap.set("n", "<leader>lS", "<cmd>LoomSwitch<cr>")
 | `:LoomSwitch` | `[branch\|snapshot\|new-branch]` | Save current, switch branch, restore |
 
 ### Workspaces
+
+A **workspace** coordinates snapshots across multiple Git repositories. Use it when you work on a feature that spans several repos.
+
+**Example — save a multi-repo workspace:**
+
+```bash
+# In repo A
+$ cd ~/projects/frontend
+$ nvim
+:LoomWorkspaceSave feature-x
+
+# In repo B
+$ cd ~/projects/backend
+$ nvim
+:LoomWorkspaceSave feature-x
+```
+
+**Example — restore later:**
+
+```bash
+# Back in repo A
+$ cd ~/projects/frontend
+$ nvim
+:LoomWorkspaceLoad feature-x    # restores repo A's snapshot
+
+# Check status of all repos in the workspace
+:LoomWorkspaceStatus
+```
 
 | Command | Args | Description |
 |---|---|---|

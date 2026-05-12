@@ -62,13 +62,13 @@ local function format_snapshot(item)
 end
 
 ---@param items SnapshotItem[]
----@param on_select fun(name: string)
+---@param on_select fun(name: string)|nil
 function M.select_snapshot(items, on_select)
   vim.ui.select(items, {
     prompt = "Select snapshot:",
     format_item = format_snapshot,
   }, function(choice)
-    if choice then
+    if choice and on_select then
       on_select(choice.name)
     end
   end)

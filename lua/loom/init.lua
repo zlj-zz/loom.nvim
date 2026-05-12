@@ -70,4 +70,46 @@ function M.get_config()
   return vim.g.loom_config or vim.deepcopy(defaults)
 end
 
+-- Event bus for user hooks (on_save, on_load, etc.)
+M.events = { _handlers = {} }
+
+---@param event string
+---@param cb fun(data: table)
+---@return fun(data: table) cb
+function M.events.on(event, cb)
+  M.events._handlers[event] = M.events._handlers[event] or {}
+  table.insert(M.events._handlers[event], cb)
+  return cb
+end
+
+---@param event string
+---@param cb fun(data: table)
+function M.events.off(event, cb)
+  local handlers = M.events._handlers[event]
+  if not handlers then
+    return
+  end
+  for i, h in ipairs(handlers) do
+    if h == cb then
+      table.remove(handlers, i)
+      break
+    end
+  end
+end
+
+---@param event string
+---@param data table
+function M.events.emit(event, data)
+  local handlers = M.events._handlers[event]
+  if not handlers then
+    return
+  end
+  for _, cb in ipairs(handlers) do
+    local ok, err = pcall(cb, data)
+    if not ok then
+      vim.notify("loom event error: " .. tostring(err), vim.log.levels.WARN)
+    end
+  end
+end
+
 return M

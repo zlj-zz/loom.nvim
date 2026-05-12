@@ -22,7 +22,8 @@ end
 ---@return boolean matched, string|nil pattern
 local function match_patterns(name, patterns)
   for _, pat in ipairs(patterns) do
-    if vim.fn.match(name, pat) ~= -1 then
+    local regex = vim.fn.glob2regpat(pat)
+    if regex and vim.fn.match(name, regex) ~= -1 then
       return true, pat
     end
   end

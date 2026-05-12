@@ -71,7 +71,9 @@ local commands = {
     nargs = 0,
     desc = "List all snapshots",
     fn = function()
-      core.list()
+      core.list(function(name)
+        core.load(name)
+      end)
     end,
   },
   {

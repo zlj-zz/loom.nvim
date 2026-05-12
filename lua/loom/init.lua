@@ -60,10 +60,12 @@ function M.setup(opts)
   -- global config is the single source of truth; modules read vim.g.loom_config instead of requiring init
   vim.g.loom_config = config
 
-  -- health check reads config.data_dir, so register after setup has resolved it
-  vim.health.register("loom", function()
-    require("loom.health").check()
-  end)
+  -- health check reads config.data_dir; register if API available (0.10+)
+  if vim.health and vim.health.register then
+    vim.health.register("loom", function()
+      require("loom.health").check()
+    end)
+  end
 
   -- start autosave if enabled
   if config.autosave.enabled then

@@ -102,7 +102,7 @@ function M.list_snapshots()
   local items = vim.fn.glob(dir .. "/*/", false, true)
   local names = {}
   for _, path in ipairs(items) do
-    table.insert(names, vim.fn.fnamemodify(path, ":t"))
+    table.insert(names, vim.fn.fnamemodify(path, ":p:h:t"))
   end
   table.sort(names)
   return names
@@ -177,7 +177,7 @@ function M.list_autosaves()
   local items = vim.fn.glob(dir .. "/*/", false, true)
   local names = {}
   for _, path in ipairs(items) do
-    table.insert(names, vim.fn.fnamemodify(path, ":t"))
+    table.insert(names, vim.fn.fnamemodify(path, ":p:h:t"))
   end
   table.sort(names)
   return names

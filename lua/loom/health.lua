@@ -39,8 +39,10 @@ function M.check()
   end
 
   -- disk space check
-  ---@diagnostic disable-next-line: undefined-field
-  local stat = vim.uv and vim.uv.fs_statvfs(data_dir)
+  local stat
+  if vim.uv and vim.uv.fs_statvfs then
+    stat = vim.uv.fs_statvfs(data_dir)
+  end
   if stat then
     local avail_mb = stat.bavail * stat.bsize / (1024 * 1024)
     local avail_gb = avail_mb / 1024

@@ -12,6 +12,10 @@ local restore_buffer = require("loom.restore.buffer")
 local restore_layout = require("loom.restore.layout")
 local external_traces = require("loom.capture.external_traces")
 
+local DIFF_PATCH = "diff.patch"
+local DIFF_STAGED_PATCH = "diff_staged.patch"
+local UNTRACKED_DIR = "untracked"
+
 --- Generate a simple UUID v4 using vim.fn.rand to avoid global RNG state.
 ---@return string
 local function uuid()
@@ -97,6 +101,34 @@ local function do_save(name, opts, dir_override)
     if #terminals > 0 then
       storage.write_json(tmp .. "/terminals.json", terminals)
     end
+
+    if config.save.capture_git_diff then
+      local diff_result = git.diff_head()
+      if diff_result.success and vim.trim(diff_result.stdout) ~= "" then
+        vim.fn.writefile(vim.split(diff_result.stdout, "\n", { plain = true }), tmp .. "/" .. DIFF_PATCH)
+      end
+      local staged_result = git.diff_cached()
+      if staged_result.success and vim.trim(staged_result.stdout) ~= "" then
+        vim.fn.writefile(vim.split(staged_result.stdout, "\n", { plain = true }), tmp .. "/" .. DIFF_STAGED_PATCH)
+      end
+    end
+
+    if config.save.capture_untracked then
+      local untracked = git.untracked_files()
+      local total_size = 0
+      local max_bytes = (config.save.max_untracked_total_mb or 10) * 1024 * 1024
+      for _, file in ipairs(untracked) do
+        local src = vim.fn.getcwd() .. "/" .. file
+        local size = vim.fn.getfsize(src)
+        if size > 0 then
+          total_size = total_size + size
+          if total_size <= max_bytes then
+            local dst = tmp .. "/" .. UNTRACKED_DIR .. "/" .. file
+            storage.copy_file(src, dst)
+          end
+        end
+      end
+    end
   end)
 
   if not ok then
@@ -117,6 +149,52 @@ end
 ---@param name string
 ---@param meta table
 local function do_load(buffers, layout, name, meta)
+  local config = require("loom").get_config()
+  local dir = storage.snapshot_dir(name)
+
+  if config.load.restore_git_diff then
+    local has_changes = git.has_uncommitted_changes()
+
+    local diff_path = dir .. "/" .. DIFF_PATCH
+    if vim.fn.filereadable(diff_path) == 1 then
+      if has_changes then
+        vim.notify(
+          "Working directory has changes; skipping diff apply. Stash or commit first.",
+          vim.log.levels.WARN
+        )
+      else
+        local check = git.apply_patch(diff_path, { check = true })
+        if check.success then
+          git.apply_patch(diff_path)
+        else
+          vim.notify("Snapshot diff cannot be applied: " .. check.stdout, vim.log.levels.WARN)
+        end
+      end
+    end
+
+    local staged_path = dir .. "/" .. DIFF_STAGED_PATCH
+    if vim.fn.filereadable(staged_path) == 1 and not has_changes then
+      local check = git.apply_patch(staged_path, { check = true })
+      if check.success then
+        git.apply_patch(staged_path, { index = true })
+      end
+    end
+
+    local untracked_dir = dir .. "/" .. UNTRACKED_DIR
+    if vim.fn.isdirectory(untracked_dir) == 1 then
+      local files = vim.fn.glob(untracked_dir .. "/**", false, true)
+      for _, src in ipairs(files) do
+        if vim.fn.isdirectory(src) ~= 1 then
+          local rel = src:sub(#untracked_dir + 2)
+          local dst = vim.fn.getcwd() .. "/" .. rel
+          if not storage.copy_file(src, dst) then
+            vim.notify("Failed to restore untracked file: " .. rel, vim.log.levels.WARN)
+          end
+        end
+      end
+    end
+  end
+
   local bufnr_map, cursor_map = restore_buffer.restore_all(buffers)
   restore_layout.restore(layout, bufnr_map, cursor_map)
   vim.notify("Snapshot loaded: " .. name, vim.log.levels.INFO)

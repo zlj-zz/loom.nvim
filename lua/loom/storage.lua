@@ -93,6 +93,31 @@ function M.read_json(path)
   return decoded
 end
 
+--- Copy a file from src to dst, creating parent directories.
+---@param src string
+---@param dst string
+---@return boolean success
+function M.copy_file(src, dst)
+  local dir = vim.fn.fnamemodify(dst, ":h")
+  M.ensure_dir(dir)
+
+  local src_f = io.open(src, "rb")
+  if not src_f then
+    return false
+  end
+  local data = src_f:read("*a")
+  src_f:close()
+
+  local dst_f = io.open(dst, "wb")
+  if not dst_f then
+    return false
+  end
+  dst_f:write(data)
+  dst_f:close()
+
+  return true
+end
+
 ---@return string[]
 function M.list_snapshots()
   local dir = M.data_dir() .. "/snapshots"

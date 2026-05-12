@@ -108,6 +108,46 @@ function M.current_commit()
   return trim_stdout(git_cmd({ "git", "rev-parse", "--short", "HEAD" }))
 end
 
+---@return GitResult
+function M.diff_head()
+  return git_cmd({ "git", "diff", "HEAD" })
+end
+
+---@return GitResult
+function M.diff_cached()
+  return git_cmd({ "git", "diff", "--cached" })
+end
+
+---@param path string
+---@param opts {check: boolean, index: boolean}|nil
+---@return GitResult
+function M.apply_patch(path, opts)
+  local args = { "git", "apply" }
+  if opts and opts.check then
+    table.insert(args, "--check")
+  end
+  if opts and opts.index then
+    table.insert(args, "--index")
+  end
+  table.insert(args, path)
+  return git_cmd(args)
+end
+
+---@return string[]
+function M.untracked_files()
+  local result = git_cmd({ "git", "ls-files", "--others", "--exclude-standard" })
+  local files = {}
+  if result.success then
+    for line in result.stdout:gmatch("[^\r\n]+") do
+      line = vim.trim(line)
+      if line ~= "" then
+        table.insert(files, line)
+      end
+    end
+  end
+  return files
+end
+
 --- Run a git command in a specific directory without changing global cwd.
 ---@param dir string
 ---@param args string[]

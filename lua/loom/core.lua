@@ -103,13 +103,13 @@ local function do_save(name, opts, dir_override)
     end
 
     if config.save.capture_git_diff then
-      local diff_result = git.diff_head()
-      if diff_result.success and vim.trim(diff_result.stdout) ~= "" then
-        vim.fn.writefile(vim.split(diff_result.stdout, "\n", { plain = true }), tmp .. "/" .. DIFF_PATCH)
-      end
       local staged_result = git.diff_cached()
-      if staged_result.success and vim.trim(staged_result.stdout) ~= "" then
+      if staged_result.success and staged_result.stdout ~= "" then
         vim.fn.writefile(vim.split(staged_result.stdout, "\n", { plain = true }), tmp .. "/" .. DIFF_STAGED_PATCH)
+      end
+      local diff_result = git.diff_unstaged()
+      if diff_result.success and diff_result.stdout ~= "" then
+        vim.fn.writefile(vim.split(diff_result.stdout, "\n", { plain = true }), tmp .. "/" .. DIFF_PATCH)
       end
     end
 
@@ -154,30 +154,23 @@ local function do_load(buffers, layout, name, meta)
 
   if config.load.restore_git_diff then
     local has_changes = git.has_uncommitted_changes()
-
-    local diff_path = dir .. "/" .. DIFF_PATCH
-    if vim.fn.filereadable(diff_path) == 1 then
-      if has_changes then
-        vim.notify(
-          "Working directory has changes; skipping diff apply. Stash or commit first.",
-          vim.log.levels.WARN
-        )
-      else
-        local check = git.apply_patch(diff_path, { check = true })
+    if has_changes then
+      vim.notify(
+        "Working directory has changes; skipping diff apply. Stash or commit first.",
+        vim.log.levels.WARN
+      )
+    else
+      local function try_apply_patch(path, apply_opts, label)
+        local check = git.apply_patch(path, { check = true })
         if check.success then
-          git.apply_patch(diff_path)
-        else
-          vim.notify("Snapshot diff cannot be applied: " .. check.stdout, vim.log.levels.WARN)
+          git.apply_patch(path, apply_opts)
+        elseif check.exit_code ~= 128 then
+          vim.notify("Snapshot " .. label .. " diff cannot be applied: " .. check.stdout, vim.log.levels.WARN)
         end
       end
-    end
 
-    local staged_path = dir .. "/" .. DIFF_STAGED_PATCH
-    if vim.fn.filereadable(staged_path) == 1 and not has_changes then
-      local check = git.apply_patch(staged_path, { check = true })
-      if check.success then
-        git.apply_patch(staged_path, { index = true })
-      end
+      try_apply_patch(dir .. "/" .. DIFF_STAGED_PATCH, { index = true }, "staged")
+      try_apply_patch(dir .. "/" .. DIFF_PATCH, {}, "unstaged")
     end
 
     local untracked_dir = dir .. "/" .. UNTRACKED_DIR

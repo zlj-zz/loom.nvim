@@ -109,13 +109,13 @@ function M.current_commit()
 end
 
 ---@return GitResult
-function M.diff_head()
-  return git_cmd({ "git", "diff", "HEAD" })
+function M.diff_cached()
+  return git_cmd({ "git", "diff", "--cached" })
 end
 
 ---@return GitResult
-function M.diff_cached()
-  return git_cmd({ "git", "diff", "--cached" })
+function M.diff_unstaged()
+  return git_cmd({ "git", "diff" })
 end
 
 ---@param path string

@@ -19,7 +19,7 @@ end
 ---@param args string
 ---@return string|nil name
 local function parse_name(args)
-  local name = args:match("^%s*([^%-].-)%s*$") or args:match("^%s*(.-)%s*%-%-")
+  local name = args:match("^%s*(.-)%s*%-%-") or args:match("^%s*([^%-].-)%s*$")
   return nil_if_empty(name)
 end
 

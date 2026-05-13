@@ -29,10 +29,10 @@ describe("git diff capture and restore", function()
     end
   end)
 
-  it("diff_head captures unstaged changes", function()
+  it("diff_unstaged captures unstaged changes", function()
     vim.fn.writefile({ "modified content" }, tmp_repo .. "/tracked.txt")
 
-    local result = git.diff_head()
+    local result = git.diff_unstaged()
 
     assert.is_true(result.success)
     assert.matches("modified content", result.stdout)
@@ -48,8 +48,8 @@ describe("git diff capture and restore", function()
     assert.matches("staged content", result.stdout)
   end)
 
-  it("diff_head returns empty when no changes", function()
-    local result = git.diff_head()
+  it("diff_unstaged returns empty when no changes", function()
+    local result = git.diff_unstaged()
 
     assert.is_true(result.success)
     assert.is_true(vim.trim(result.stdout) == "")
@@ -72,7 +72,7 @@ describe("git diff capture and restore", function()
 
   it("apply_patch restores unstaged changes", function()
     vim.fn.writefile({ "patch me" }, tmp_repo .. "/tracked.txt")
-    local diff = git.diff_head()
+    local diff = git.diff_unstaged()
     assert.is_true(diff.success)
 
     -- reset file

@@ -384,25 +384,42 @@ function M.load(name)
 end
 
 ---@param on_select fun(name: string)|nil
-function M.list(on_select)
-  local names = storage.list_snapshots()
-  if #names == 0 then
-    vim.notify("No snapshots found", vim.log.levels.INFO)
+---@param opts {all_repos: boolean|nil}|nil
+function M.list(on_select, opts)
+  opts = opts or {}
+  local config = require("loom").get_config()
+
+  local filter_repo
+  if not opts.all_repos and config.list.filter_by_repo then
+    filter_repo = git.current_repo_name()
+  end
+
+  local raw_items = storage.list_snapshots_with_meta(filter_repo)
+
+  if #raw_items == 0 then
+    if filter_repo then
+      vim.notify("No snapshots for repo: " .. filter_repo, vim.log.levels.INFO)
+    else
+      vim.notify("No snapshots found", vim.log.levels.INFO)
+    end
     return
   end
 
   local items = {}
-  for _, n in ipairs(names) do
-    local meta = storage.read_json(storage.snapshot_dir(n) .. "/meta.json")
+  for _, item in ipairs(raw_items) do
+    local meta = item.meta
     table.insert(items, {
-      name = n,
-      branch = meta and meta.branch,
-      time = meta and meta.timestamp,
-      note = meta and meta.note,
+      name = item.name,
+      branch = meta.branch,
+      repo = meta.repo_name,
+      time = meta.timestamp,
+      note = meta.note,
     })
   end
 
-  list_ui.select_snapshot(items, on_select)
+  list_ui.select_snapshot(items, on_select, {
+    show_repo = not filter_repo and config.list.show_repo_in_all_mode,
+  })
 end
 
 function M.delete(name)

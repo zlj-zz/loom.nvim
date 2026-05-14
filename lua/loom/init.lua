@@ -26,6 +26,7 @@ local defaults = {
   autosave = { enabled = false, interval_minutes = 30, on_events = { "BufWritePost" }, max_auto_snaps = 10 },
   cleanup = { max_snapshots = 50, auto_cleanup_after_days = 90 },
   naming = { default_prefix = "", timestamp_format = "%Y%m%d_%H%M%S" },
+  list = { filter_by_repo = true, show_repo_in_all_mode = true },
   workspace = {
     enabled = true,
     project_roots = { "~/projects", "~/workspace" },

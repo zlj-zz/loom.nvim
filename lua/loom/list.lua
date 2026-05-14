@@ -60,13 +60,22 @@ end
 ---@class SnapshotItem
 ---@field name string
 ---@field branch string|nil
+---@field repo string|nil
 ---@field time string|nil
 ---@field note string|nil
 
+---@class FormatSnapshotOpts
+---@field show_repo boolean|nil
+
 ---@param item SnapshotItem
+---@param opts FormatSnapshotOpts|nil
 ---@return string
-function M.format_snapshot(item)
+function M.format_snapshot(item, opts)
+  opts = opts or {}
   local parts = { item.name }
+  if opts.show_repo and item.repo then
+    table.insert(parts, "  [" .. item.repo .. "]")
+  end
   if item.branch then
     table.insert(parts, "  (" .. item.branch .. ")")
   end
@@ -83,12 +92,18 @@ function M.format_snapshot(item)
   return table.concat(parts)
 end
 
+---@class SelectSnapshotOpts : FormatSnapshotOpts
+
 ---@param items SnapshotItem[]
 ---@param on_select fun(name: string)|nil
-function M.select_snapshot(items, on_select)
+---@param opts SelectSnapshotOpts|nil
+function M.select_snapshot(items, on_select, opts)
+  opts = opts or {}
   vim.ui.select(items, {
     prompt = "Select snapshot:",
-    format_item = M.format_snapshot,
+    format_item = function(item)
+      return M.format_snapshot(item, opts)
+    end,
   }, function(choice)
     if choice and on_select then
       on_select(choice.name)

@@ -40,6 +40,12 @@ local function parse_workspace_args(args)
   return name, repos
 end
 
+---@param args string
+---@return boolean all_repos
+local function parse_list_args(args)
+  return args ~= nil and args:match("%-%-all") ~= nil
+end
+
 ---@class LoomCommand
 ---@field name string
 ---@field nargs number|string
@@ -68,12 +74,13 @@ local commands = {
   },
   {
     name = "LoomList",
-    nargs = 0,
-    desc = "List all snapshots",
-    fn = function()
+    nargs = "?",
+    desc = "List snapshots (pass --all for all repos)",
+    fn = function(args)
+      local all_repos = parse_list_args(args)
       core.list(function(name)
         core.load(name)
-      end)
+      end, { all_repos = all_repos })
     end,
   },
   {

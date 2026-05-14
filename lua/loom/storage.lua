@@ -118,18 +118,38 @@ function M.copy_file(src, dst)
   return true
 end
 
+---@class SnapshotMetaItem
+---@field name string
+---@field meta table
+
+---@param repo_name string|nil
+---@return SnapshotMetaItem[]
+function M.list_snapshots_with_meta(repo_name)
+  local dir = M.data_dir() .. "/snapshots"
+  local items = {}
+  local paths = vim.fn.glob(dir .. "/*/", false, true)
+  for _, path in ipairs(paths) do
+    local name = vim.fn.fnamemodify(path, ":p:h:t")
+    local meta = M.read_json(path .. "/meta.json")
+    if meta then
+      if not repo_name or meta.repo_name == repo_name then
+        table.insert(items, { name = name, meta = meta })
+      end
+    end
+  end
+  table.sort(items, function(a, b)
+    return (a.meta.timestamp or "") > (b.meta.timestamp or "")
+  end)
+  return items
+end
+
 ---@return string[]
 function M.list_snapshots()
-  local dir = M.data_dir() .. "/snapshots"
-  if vim.fn.isdirectory(dir) ~= 1 then
-    return {}
-  end
-  local items = vim.fn.glob(dir .. "/*/", false, true)
+  local items = M.list_snapshots_with_meta(nil)
   local names = {}
-  for _, path in ipairs(items) do
-    table.insert(names, vim.fn.fnamemodify(path, ":p:h:t"))
+  for _, item in ipairs(items) do
+    table.insert(names, item.name)
   end
-  table.sort(names)
   return names
 end
 

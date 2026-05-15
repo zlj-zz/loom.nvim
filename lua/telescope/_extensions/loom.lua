@@ -13,18 +13,27 @@ local previewers = require("telescope.previewers")
 local core = require("loom.core")
 local storage = require("loom.storage")
 local list_ui = require("loom.list")
+local git = require("loom.git")
 
----@return {name: string, branch: string|nil, time: string|nil, note: string|nil, meta: table|nil}[]
-local function get_items()
-  local names = storage.list_snapshots()
+---@param all_repos boolean
+---@return {name: string, branch: string|nil, repo: string|nil, time: string|nil, note: string|nil, meta: table|nil}[]
+local function get_items(all_repos)
+  local config = require("loom").get_config()
+  local filter_repo
+  if not all_repos and config.list.filter_by_repo then
+    filter_repo = git.current_repo_name()
+  end
+
+  local raw_items = storage.list_snapshots_with_meta(filter_repo)
   local items = {}
-  for _, n in ipairs(names) do
-    local meta = storage.read_json(storage.snapshot_dir(n) .. "/meta.json")
+  for _, item in ipairs(raw_items) do
+    local meta = item.meta
     table.insert(items, {
-      name = n,
-      branch = meta and meta.branch,
-      time = meta and meta.timestamp,
-      note = meta and meta.note,
+      name = item.name,
+      branch = meta.branch,
+      repo = meta.repo_name,
+      time = meta.timestamp,
+      note = meta.note,
       meta = meta,
     })
   end
@@ -52,21 +61,31 @@ end
 ---@param opts table|nil
 local function loom_picker(opts)
   opts = opts or {}
-  local items = get_items()
+  local all_repos = opts.all_repos or false
+  local items = get_items(all_repos)
 
   if #items == 0 then
-    vim.notify("No snapshots found", vim.log.levels.INFO)
+    local config = require("loom").get_config()
+    local filter_repo = not all_repos and config.list.filter_by_repo and git.current_repo_name()
+    if filter_repo then
+      vim.notify("No snapshots for repo: " .. filter_repo, vim.log.levels.INFO)
+    else
+      vim.notify("No snapshots found", vim.log.levels.INFO)
+    end
     return
   end
 
+  local config = require("loom").get_config()
+  local show_repo = all_repos and config.list.show_repo_in_all_mode
+
   pickers.new(opts, {
-    prompt_title = "Loom Snapshots",
+    prompt_title = all_repos and "Loom Snapshots (all repos)" or "Loom Snapshots",
     finder = finders.new_table({
       results = items,
       entry_maker = function(item)
         return {
           value = item,
-          display = list_ui.format_snapshot(item),
+          display = list_ui.format_snapshot(item, { show_repo = show_repo }),
           ordinal = item.name,
         }
       end,

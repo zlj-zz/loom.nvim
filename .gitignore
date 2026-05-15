@@ -22,3 +22,11 @@ Thumbs.db
 
 # Temporary directories during development
 .tmp.*
+
+.claude/
+
+CLAUDE.md
+PRD.md 
+TECH.md 
+TASK.md 
+
